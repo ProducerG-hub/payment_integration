@@ -1,6 +1,8 @@
 require('dotenv').config();
 const pool = require('../config/database');
+const PaymentCallback = require('./simulation').simulatePaymentGatewayCallback;
 
+// sending the payment request to the payment gateway
 module.exports.PostPayments = async (req, res) => {
     try{
         const {phone,amount} = req.body;
@@ -25,6 +27,7 @@ module.exports.PostPayments = async (req, res) => {
         const query = 'INSERT INTO transactions (phone, amount, reference, status) VALUES ($1, $2, $3, $4) RETURNING *';
         const values = [phone, amount, reference, 'PENDING'];
         const result = await pool.query(query, values);
+        await PaymentCallback(reference);// auto callback from the payment gateway after a random delay with a status of either SUCCESS or FAILED
         await pool.query('COMMIT');
         res.status(201).json({message: 'Transaction created successfully', transaction: result.rows[0]});  }
         catch (err) {
@@ -38,6 +41,7 @@ module.exports.PostPayments = async (req, res) => {
     }
 };
 
+// handling the payment gateway callback and updating the transaction status in the database
 module.exports.webhook = async (req, res) => {
     try {
         const {reference, status} = req.body;
