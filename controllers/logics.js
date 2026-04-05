@@ -26,8 +26,8 @@ module.exports.PostPayments = async (req, res) => {
         const values = [phone, amount, reference, 'PENDING'];
         const result = await pool.query(query, values);
         await pool.query('COMMIT');
-        res.status(201).json({message: 'Transaction created successfully', transaction: result.rows[0]});
-    } catch (err) {
+        res.status(201).json({message: 'Transaction created successfully', transaction: result.rows[0]});  }
+        catch (err) {
         await pool.query('ROLLBACK');
         console.error('Error creating transaction:',
              {
@@ -48,7 +48,7 @@ module.exports.webhook = async (req, res) => {
             return res.status(400).json({message: 'Invalid status value'});
         }
         if (!reference || !status) {
-            return res.status(400).json({message: 'Reference and status are required'});
+            return res.status(400).json({message: 'All fields are required'});
         }
 
         //PREVENTING DUPLICATE TRANSACTIONS
