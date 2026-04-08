@@ -45,20 +45,28 @@ module.exports.PostPayments = async (req, res) => {
 // handling the payment gateway callback and updating the transaction status in the database
 module.exports.webhook = async (req, res) => {
     try {
-        const {reference, status, signature} = req.body;
+        const {reference, status, signature, timestamp} = req.body;
         const validStatuses = ['PENDING', 'SUCCESS', 'FAILED'];
 
         //validating the input data
         if (!validStatuses.includes(status)) {
             return res.status(400).json({message: 'Invalid status value'});
         }
-        if (!reference || !status || !signature) {
+        if (!reference || !status || !signature || !timestamp) {
             return res.status(400).json({message: 'All fields are required'});
         }
 
         // Verify the HMAC signature to ensure the request is from a trusted source
         const secret = process.env.WEBHOOK_SECRET;
-        const expectedSignature = crypto.createHash('sha256').update(reference + status + secret).digest('hex'); // Generate expected HMAC signature
+        const now = Date.now();
+        const timeDifference = Math.abs(now - timestamp);
+        if (timeDifference > 5 * 60 * 1000) { // Check if the timestamp is older than 5 minutes
+            console.warn(`Received webhook with an old timestamp for reference ${reference}. Timestamp: ${timestamp}, Current time: ${now}`);
+            return res.status(400).json({message: 'Invalid signature: timestamp is too old'});
+        }
+
+        // Generate the expected signature using the same method as the simulation
+        const expectedSignature = crypto.createHash('sha256').update(reference + status + secret + timestamp).digest('hex'); // Generate expected HMAC signature
         if (signature !== expectedSignature) {
             console.warn(`Invalid signature for reference ${reference}. Expected: ${expectedSignature}, Received: ${signature}`);
             return res.status(400).json({message: 'Invalid signature'});

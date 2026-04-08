@@ -10,11 +10,13 @@ const simulatePaymentGatewayCallback = async (reference) => {
         const secret = process.env.WEBHOOK_SECRET;
         setTimeout(async () => {
             const status = Math.random() < 0.8 ? 'SUCCESS' : 'FAILED'; // 80% chance of success
-            const signature = crypto.createHash('sha256').update(reference + status + secret).digest('hex'); // Generate HMAC signature
+            const timestamp = Date.now();
+            const signature = crypto.createHash('sha256').update(reference + status + secret + timestamp).digest('hex'); // Generate HMAC signature
             await axios.post(process.env.WEBHOOK_URL, {
                 reference,
                 status,
-                signature
+                signature,
+                timestamp
             });
             console.log(`Callback sent for reference: ${reference} with status: ${status}`);
             }, delay);
