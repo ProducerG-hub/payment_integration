@@ -1,5 +1,6 @@
 require('dotenv').config();
 const pool = require('../config/database');
+const crypto = require('crypto'); //for generating HMAC signature
 const PaymentCallback = require('./simulation').simulatePaymentGatewayCallback;
 
 // sending the payment request to the payment gateway
@@ -44,21 +45,23 @@ module.exports.PostPayments = async (req, res) => {
 // handling the payment gateway callback and updating the transaction status in the database
 module.exports.webhook = async (req, res) => {
     try {
-        const {reference, status} = req.body;
+        const {reference, status, signature} = req.body;
         const validStatuses = ['PENDING', 'SUCCESS', 'FAILED'];
 
         //validating the input data
         if (!validStatuses.includes(status)) {
             return res.status(400).json({message: 'Invalid status value'});
         }
-        if (!reference || !status) {
+        if (!reference || !status || !signature) {
             return res.status(400).json({message: 'All fields are required'});
         }
 
-        //PREVENTING DUPLICATE TRANSACTIONS
-        const Status = await pool.query('SELECT * FROM transactions WHERE reference = $1', [reference]);
-        if(Status.rows[0].status === 'SUCCESS') {
-           return res.status(200).json({message: 'Transaction already marked as successful', transaction: Status.rows[0]});
+        // Verify the HMAC signature to ensure the request is from a trusted source
+        const secret = process.env.WEBHOOK_SECRET;
+        const expectedSignature = crypto.createHash('sha256').update(reference + status + secret).digest('hex'); // Generate expected HMAC signature
+        if (signature !== expectedSignature) {
+            console.warn(`Invalid signature for reference ${reference}. Expected: ${expectedSignature}, Received: ${signature}`);
+            return res.status(400).json({message: 'Invalid signature'});
         }
 
         await pool.query('BEGIN');
