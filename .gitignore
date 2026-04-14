@@ -2,3 +2,12 @@
 /dist
 /logs
 /.env
+/.vscode
+/.env.local
+/.env.development
+/.env.test
+/.env.production
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+pnpm-debug.log

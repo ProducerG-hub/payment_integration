@@ -8,18 +8,25 @@ const simulatePaymentGatewayCallback = async (reference) => {
     try {
         const delay = Math.floor(Math.random() * 5000) + 1000; // Random delay between 1-5 seconds
         const secret = process.env.WEBHOOK_SECRET;
-        setTimeout(async () => {
-            const status = Math.random() < 0.8 ? 'SUCCESS' : 'FAILED'; // 80% chance of success
-            const timestamp = Date.now();
-            const signature = crypto.createHash('sha256').update(reference + status + secret + timestamp).digest('hex'); // Generate HMAC signature
-            await axios.post(process.env.WEBHOOK_URL, {
-                reference,
-                status,
-                signature,
-                timestamp
-            });
-            console.log(`Callback sent for reference: ${reference} with status: ${status}`);
-            }, delay);
+        setTimeout(() => {
+            (async () => {
+                try {
+                    const statuses = ["SUCCESS", "FAILED"];
+                    const status = statuses[Math.floor(Math.random() * statuses.length)];
+                    const timestamp = Date.now();
+                    const signature = crypto.createHmac('sha256', secret).update(reference + status + timestamp + secret).digest('hex'); // Generate HMAC signature
+                    await axios.post(process.env.WEBHOOK_URL, {
+                        reference,
+                        status,
+                        timestamp,
+                        signature
+                    });
+                    console.log(`Callback sent for reference: ${reference} with status: ${status}`);
+                } catch (error) {
+                    console.error(`Callback failed for reference: ${reference}`, error.message);
+                }
+            })();
+        }, delay);
         
     } catch (error) {
         console.error('Error simulating payment gateway callback:', error.message);
