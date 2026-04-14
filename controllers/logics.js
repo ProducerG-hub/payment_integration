@@ -3,6 +3,10 @@ const pool = require('../config/database');
 const crypto = require('crypto'); //for generating HMAC signature
 const PaymentCallback = require('./simulation').simulatePaymentGatewayCallback;
 
+module.exports.getPayments = async (req, res) => {
+    res.render('home');
+}
+
 // sending the payment request to the payment gateway
 module.exports.PostPayments = async (req, res) => {
     try{
