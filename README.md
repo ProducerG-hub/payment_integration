@@ -85,6 +85,7 @@ This project reproduces that flow locally:
 flowchart LR
     A[Client or UI] -->|POST /payments| B[Application Server]
     B --> C[(PostgreSQL)]
+    B -->|PENDING| C
     B --> D[Simulated Gateway]
     D -->|POST /webhook| B
     B -->|verify signature + timestamp| C
@@ -279,5 +280,4 @@ Current automated tests cover:
 
 ## Author
 
-Gwamaka A Mwakabuta
-Mlue Technology
+Gwamaka A Mwakabuta - Mlue Technology
