@@ -84,8 +84,7 @@ This project reproduces that flow locally:
 ```mermaid
 flowchart LR
     A[Client or UI] -->|POST /payments| B[Application Server]
-    B --> C[(PostgreSQL)]
-    B -->|PENDING| C
+    B -->|PENDING| C[(PostgreSQL)]
     B --> D[Simulated Gateway]
     D -->|POST /webhook| B
     B -->|verify signature + timestamp| C
