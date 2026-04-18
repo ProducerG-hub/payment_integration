@@ -49,12 +49,14 @@ This project reproduces that flow locally:
 - Simulated payment gateway callback with random delay and random final status.
 - HMAC SHA-256 signature verification for webhook authenticity.
 - Replay protection via callback age limit.
+- Rate limiting on payment and webhook endpoints.
 - Unit tests for key validation and webhook behavior.
 
 ## Tech Stack
 
 - Node.js (CommonJS)
 - Express 5
+- express-rate-limit
 - PostgreSQL (`pg`)
 - EJS
 - Axios
@@ -188,9 +190,13 @@ Welcome to the payment API
 
 Returns the EJS payment form page.
 
+This route is rate limited to 5 requests per minute per IP address.
+
 ### `POST /payments`
 
 Creates a transaction and triggers simulated callback flow.
+
+This route is rate limited to 5 requests per minute per IP address.
 
 Request body:
 
@@ -224,6 +230,8 @@ Success response (`201`):
 
 Receives gateway callback and updates transaction state.
 
+This route is rate limited to 100 requests per minute per IP address.
+
 Request body:
 
 ```json
@@ -247,6 +255,7 @@ Possible responses:
 - `200`: already finalized (idempotent behavior)
 - `400`: invalid input/signature/stale callback
 - `404`: transaction not found
+- `429`: too many requests, please try again later
 
 ## Testing
 
@@ -266,6 +275,7 @@ Current automated tests cover:
 
 - Webhook authenticity is enforced via HMAC signature verification.
 - Replay attacks are reduced by timestamp freshness checks.
+- Route-level rate limiting helps reduce abuse and unnecessary callback spikes.
 - Finalized transactions are protected from duplicate updates.
 - Use a strong `WEBHOOK_SECRET` and never commit secrets to version control.
 
