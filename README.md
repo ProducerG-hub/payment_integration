@@ -26,6 +26,7 @@ It is useful for learning and testing payment integration patterns such as webho
 - [API Reference](#api-reference)
 - [Testing](#testing)
 - [Security Notes](#security-notes)
+- [Security Recommendations](#security-recommendations)
 - [Roadmap Ideas](#roadmap-ideas)
 - [Author](#author)
 
@@ -279,7 +280,21 @@ Current automated tests cover:
 - Replay attacks are reduced by timestamp freshness checks.
 - Route-level rate limiting helps reduce abuse and unnecessary callback spikes.
 - Finalized transactions are protected from duplicate updates.
-- Use a strong `WEBHOOK_SECRET` and never commit secrets to version control.
+
+## Security Recommendations
+
+The project already includes basic protections for a simulated payment flow. For a more production-ready setup, apply the following recommendations:
+
+- Store all secrets in environment variables or a secrets manager; never hard-code them in source code.
+- Use a strong `WEBHOOK_SECRET` with at least 32 characters and rotate it regularly.
+- Keep `WEBHOOKMAXAGE` short enough to reduce replay risk while still allowing normal callback delivery.
+- Serve the application over HTTPS in any non-local environment.
+- Keep rate limiting enabled on all public endpoints, especially payment and webhook routes.
+- Validate all request fields strictly before any database operation or external call.
+- Use database least-privilege credentials so the application can only access the tables it needs.
+- Log security-relevant events such as invalid signatures, stale callbacks, and excessive request bursts.
+- Do not expose `.env` files, database credentials, or webhook secrets in commits or logs.
+- Review webhook IP allowlisting or provider-side verification if the project is extended to a real gateway.
 
 ## Roadmap Ideas
 
