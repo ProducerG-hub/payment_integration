@@ -25,16 +25,16 @@ module.exports.PostPayments = async (req, res) => {
 
         //validating the input data
         if (!phone || !amount || !reference) {
-            return res.status(400).json({message: 'All fields are required'});
+            return res.status(400).json({message: 'Invalid credentials'});
         }
         if (isNaN(amount) || amount <= 0) {
-            return res.status(400).json({message: 'Invalid amount value'});
+            return res.status(400).json({message: 'Invalid credentials'});
         }
         if(!/^\d{10}$/.test(phone)) {
-            return res.status(400).json({message: 'Phone number must be 10 digits'});
+            return res.status(400).json({message: 'Invalid credentials'});
         }
         if(!validStatuses.includes('PENDING')) {
-            return res.status(400).json({message: 'Invalid status value'});
+            return res.status(400).json({message: 'Invalid credentials'});
         }
 
         await client.query('BEGIN');
@@ -43,10 +43,10 @@ module.exports.PostPayments = async (req, res) => {
         const checkResult = await client.query(checkQuery, [reference]);
         if (checkResult.rowCount > 0) {
             await client.query('ROLLBACK');
-            return res.status(400).json({message: 'Reference already exists'});
+            return res.status(400).json({message: 'Invalid credentials'});
         }
 
-        const query = 'INSERT INTO transactions (phone, amount, reference, status) VALUES ($1, $2, $3, $4) RETURNING *';
+        const query = 'INSERT INTO transactions (phone, amount, reference, status) VALUES ($1, $2, $3, $4) RETURNING amount, reference';
         const values = [phone, amount, reference, 'PENDING'];
         const result = await client.query(query, values);
         await PaymentCallback(reference);// auto callback from the payment gateway after a random delay with a status of either SUCCESS or FAILED
@@ -55,10 +55,13 @@ module.exports.PostPayments = async (req, res) => {
     }
         catch (err) {
         await client.query('ROLLBACK');
+        const safeBody ={
+            reference: req.body.reference
+        }
         console.error('Error creating transaction:',
              {
-                body: req.body.reference,
-                error: err.message
+                body: safeBody,
+                error: "Database error or unexpected issue during transaction creation"
              });
         res.status(500).json({message: 'Internal server error'});
     }
@@ -78,20 +81,20 @@ module.exports.webhook = async (req, res) => {
 
         //validating the input data
         if (!validStatuses.includes(status)) {
-            return res.status(400).json({message: 'Invalid status value'});
+            return res.status(400).json({message: 'Invalid credentials'});
         }
         if (!reference || !status || !signature || !timestamp) {
-            return res.status(400).json({message: 'All fields are required'});
+            return res.status(400).json({message: 'Invalid credentials'});
         }
 
         // Verify the HMAC signature to ensure the request is from a trusted source
         const secret = getValidatedWebhookSecret();
         if (!secret) {
             console.error('Webhook misconfiguration: WEBHOOK_SECRET is missing or too weak.');
-            return res.status(500).json({ message: 'Webhook configuration error' });
+            return res.status(500).json({ message: 'Internal server error' });
         }
         if (!timestamp || isNaN(timestamp)) {
-         return res.status(400).json({ message: "Invalid timestamp" });
+         return res.status(400).json({ message: "Invalid credentials" });
         }
 
         // Check if the callback is too old or from the future to prevent replay attacks
@@ -105,7 +108,7 @@ module.exports.webhook = async (req, res) => {
         const isHexSignature = /^[a-fA-F0-9]+$/.test(signature);
         if (!isHexSignature || signature.length !== expectedSignature.length) {
             console.warn(`Malformed signature for reference ${reference}.`);
-            return res.status(400).json({message: 'Invalid signature'});
+            return res.status(400).json({message: 'Invalid credentials'});
         }
 
         const providedSignatureBuffer = Buffer.from(signature, 'hex');
@@ -113,7 +116,7 @@ module.exports.webhook = async (req, res) => {
         const isSignatureValid = crypto.timingSafeEqual(providedSignatureBuffer, expectedSignatureBuffer);
         if (!isSignatureValid) {
             console.warn(`Invalid signature for reference ${reference}.`);
-            return res.status(400).json({message: 'Invalid signature'});
+            return res.status(400).json({message: 'Invalid credentials'});
         }
 
         await client.query('BEGIN');
@@ -134,16 +137,21 @@ module.exports.webhook = async (req, res) => {
         const values = [status, reference];
         const result = await client.query(query, values);
         await client.query('COMMIT');
-         res.status(200).json({message: 'Transaction updated successfully', transaction: result.rows[0]});
+         res.status(200).json({message: 'Transaction updated successfully', transaction: reference});
+         console.log('transaction updated successfully', { reference, status });
 
         
         
     } catch (err) {
         await client.query('ROLLBACK');
+        const safeBody ={
+            reference: req.body.reference,
+            status: req.body.status
+        }
         console.error('Error updating transaction:',
              {
-                body: req.body,
-                error: err.message
+                body: safeBody,
+                error: "Database error or unexpected issue during webhook processing"
              });
         res.status(500).json({message: 'Internal server error'});
     }

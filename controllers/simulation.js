@@ -3,11 +3,23 @@ require('dotenv').config();
 const axios = require('axios'); //for making HTTP requests to the webhook endpoint
 const crypto = require('crypto'); //for generating HMAC signature
 
+const getValidatedWebhookSecret = () => {
+    const secret = process.env.WEBHOOK_SECRET;
+    if (typeof secret !== 'string' || !secret.trim() || secret.length < 32) {
+        return null;
+    }
+    return secret;
+};
+
 const simulatePaymentGatewayCallback = async (reference) => {
     console.log('simulation on process ..............');
     try {
         const delay = Math.floor(Math.random() * 5000) + 1000; // Random delay between 1-5 seconds
-        const secret = process.env.WEBHOOK_SECRET;
+        const secret = getValidatedWebhookSecret();
+        if (!secret) {
+            console.error('Webhook misconfiguration: WEBHOOK_SECRET is missing or too weak.');
+            return;
+        }
         setTimeout(() => {
             (async () => {
                 try {
@@ -23,14 +35,15 @@ const simulatePaymentGatewayCallback = async (reference) => {
                     });
                     console.log(`Callback sent for reference: ${reference} with status: ${status}`);
                 } catch (error) {
-                    console.error(`Callback failed for reference: ${reference}`, error.message);
+                    console.error(`Callback failed for reference: ${reference}`, {
+                        message: "Unexpected error occured during processing the callback"
+                    });
                 }
             })();
         }, delay);
         
     } catch (error) {
-        console.error('Error simulating payment gateway callback:', error.message);
-        throw error;
+        console.error('Unexpected error occured during simulation');
     }
 };
 
