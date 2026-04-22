@@ -59,12 +59,23 @@ function loadLogicsWithMocks({ poolMock, paymentCallbackMock = async () => {} })
     };
 }
 
-test('PostPayments rejects invalid phone and does not query DB', async () => {
-    const poolMock = {
-        query: async () => {
-            throw new Error('DB should not be touched for invalid input');
-        }
+function createPoolMockWithClient(clientQueryHandler) {
+    const client = {
+        query: clientQueryHandler,
+        release() {}
     };
+
+    return {
+        connect: async () => client
+    };
+}
+
+test('PostPayments rejects invalid phone and does not query DB', async () => {
+    let queryCalls = 0;
+    const poolMock = createPoolMockWithClient(async () => {
+        queryCalls += 1;
+        throw new Error('DB should not be queried for invalid input');
+    });
 
     const { logics, cleanup } = loadLogicsWithMocks({ poolMock });
     try {
@@ -75,24 +86,25 @@ test('PostPayments rejects invalid phone and does not query DB', async () => {
 
         assert.equal(res.statusCode, 400);
         assert.equal(res.payload.message, 'Phone number must be 10 digits');
+        assert.equal(queryCalls, 0);
     } finally {
         cleanup();
     }
 });
 
 test('webhook rejects stale callbacks before DB transaction', async () => {
-    const poolMock = {
-        query: async () => {
-            throw new Error('DB should not be touched for stale callback');
-        }
-    };
+    let queryCalls = 0;
+    const poolMock = createPoolMockWithClient(async () => {
+        queryCalls += 1;
+        throw new Error('DB should not be queried for stale callback');
+    });
 
     const { logics, cleanup } = loadLogicsWithMocks({ poolMock });
     try {
         const originalSecret = process.env.WEBHOOK_SECRET;
         const originalMaxAge = process.env.WEBHOOKMAXAGE;
 
-        process.env.WEBHOOK_SECRET = 'unit-test-secret';
+        process.env.WEBHOOK_SECRET = 'unit-test-secret-which-is-long-123';
         process.env.WEBHOOKMAXAGE = '300000';
 
         const reference = 'ORD123456';
@@ -110,6 +122,7 @@ test('webhook rejects stale callbacks before DB transaction', async () => {
 
         assert.equal(res.statusCode, 400);
         assert.equal(res.payload.message, 'Stale callback rejected');
+    assert.equal(queryCalls, 0);
 
         process.env.WEBHOOK_SECRET = originalSecret;
         process.env.WEBHOOKMAXAGE = originalMaxAge;
@@ -120,28 +133,26 @@ test('webhook rejects stale callbacks before DB transaction', async () => {
 
 test('webhook rolls back when transaction is already finalized', async () => {
     const calls = [];
-    const poolMock = {
-        query: async (sql) => {
-            calls.push(sql);
-            if (sql === 'BEGIN') {
-                return {};
-            }
-            if (sql.includes('SELECT * FROM transactions WHERE reference')) {
-                return { rowCount: 1, rows: [{ status: 'SUCCESS' }] };
-            }
-            if (sql === 'ROLLBACK') {
-                return {};
-            }
-            throw new Error(`Unexpected SQL in test: ${sql}`);
+    const poolMock = createPoolMockWithClient(async (sql) => {
+        calls.push(sql);
+        if (sql === 'BEGIN') {
+            return {};
         }
-    };
+        if (sql.includes('SELECT * FROM transactions WHERE reference')) {
+            return { rowCount: 1, rows: [{ status: 'SUCCESS' }] };
+        }
+        if (sql === 'ROLLBACK') {
+            return {};
+        }
+        throw new Error(`Unexpected SQL in test: ${sql}`);
+    });
 
     const { logics, cleanup } = loadLogicsWithMocks({ poolMock });
     try {
         const originalSecret = process.env.WEBHOOK_SECRET;
         const originalMaxAge = process.env.WEBHOOKMAXAGE;
 
-        process.env.WEBHOOK_SECRET = 'unit-test-secret';
+        process.env.WEBHOOK_SECRET = 'unit-test-secret-which-is-long-123';
         process.env.WEBHOOKMAXAGE = '300000';
 
         const reference = 'ORD789';
