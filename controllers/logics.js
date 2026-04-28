@@ -12,7 +12,7 @@ const getValidatedWebhookSecret = () => {
 };
 
 module.exports.getPayments = async (req, res) => {
-    res.render('home');
+    res.render('pay');
 }
 
 // sending the payment request to the payment gateway
@@ -51,7 +51,7 @@ module.exports.PostPayments = async (req, res) => {
         const result = await client.query(query, values);
         await PaymentCallback(reference);// auto callback from the payment gateway after a random delay with a status of either SUCCESS or FAILED
         await client.query('COMMIT');
-        res.status(201).json({message: 'Transaction created successfully', transaction: result.rows[0]});  
+        res.redirect(`/success/${reference}`);  
     }
         catch (err) {
         await client.query('ROLLBACK');
@@ -137,7 +137,7 @@ module.exports.webhook = async (req, res) => {
         const values = [status, reference];
         const result = await client.query(query, values);
         await client.query('COMMIT');
-         res.status(200).json({message: 'Transaction updated successfully', transaction: reference});
+         res.redirect(`/success/${reference}`);
          console.log('transaction updated successfully', { reference, status });
 
         
@@ -159,3 +159,70 @@ module.exports.webhook = async (req, res) => {
         client.release();
     }
 };
+
+// rendering the access page based on the transaction status
+module.exports.getAccessPage = async (req, res) => {
+    let client;
+    try {
+        const { reference } = req.params;
+
+        // 1. Validate input
+        if (!reference) {
+            return res.status(400).send("Reference is required");
+        }
+
+        // 2. Fetch from DB
+        client = await pool.connect();
+        const result = await client.query(
+            "SELECT * FROM transactions WHERE reference = $1",
+            [reference]
+        );
+
+        // 3. Check existence
+        if (result.rowCount === 0) {
+            return res.status(404).render("not-found", {
+                message: "Transaction not found"
+            });
+        }
+
+        const transaction = result.rows[0];
+
+        // 4. Decision based on status
+        if (transaction.status === "SUCCESS") {
+            return res.render("success", {
+                reference: transaction.reference,
+                amount: transaction.amount
+            });
+        }
+
+        if (transaction.status === "PENDING") {
+            return res.render("pending", {
+                reference: transaction.reference,
+                amount: transaction.amount
+            });
+        }
+
+        if (transaction.status === "FAILED") {
+            return res.render("failed", {
+                reference: transaction.reference,
+                amount: transaction.amount
+            });
+        }
+
+        // fallback (unexpected status)
+        return res.status(400).send("Invalid transaction status");
+
+    } catch (err) {
+        console.error("Error loading access page:", {
+            message: "Database error or unexpected issue during access page loading"
+        });
+        res.status(500).send("Internal server error");
+    } finally {
+        // Ensure any resources are cleaned up if needed
+        if (client) client.release();
+    }
+};
+
+module.exports.getDashboard = async (req, res) => {
+    res.render('dashboard');
+}
