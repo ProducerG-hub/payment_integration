@@ -51,6 +51,7 @@ module.exports.PostPayments = async (req, res) => {
         const result = await client.query(query, values);
         await PaymentCallback(reference);// auto callback from the payment gateway after a random delay with a status of either SUCCESS or FAILED
         await client.query('COMMIT');
+        req.session.reference = reference;
         res.redirect(`/success/${reference}`);  
     }
         catch (err) {
@@ -224,5 +225,52 @@ module.exports.getAccessPage = async (req, res) => {
 };
 
 module.exports.getDashboard = async (req, res) => {
-    res.render('dashboard');
+    let client;
+    try {
+        // Check if reference exists in session
+        const reference = req.session.reference;
+        if (!reference) {
+            return res.status(403).render("not-found", {
+                message: "Access Denied: No valid session reference found"
+            });
+        }
+
+        // Fetch transaction from database
+        client = await pool.connect();
+        const result = await client.query(
+            "SELECT * FROM transactions WHERE reference = $1",
+            [reference]
+        );
+
+        // Check if transaction exists
+        if (result.rowCount === 0) {
+            return res.status(404).render("not-found", {
+                message: "Transaction not found"
+            });
+        }
+
+        const transaction = result.rows[0];
+
+        // Only allow dashboard access if status is SUCCESS
+        if (transaction.status === "SUCCESS") {
+            return res.render("dashboard", {
+                reference: transaction.reference,
+                amount: transaction.amount,
+                status: transaction.status
+            });
+        }
+
+        // Restrict access for any other status
+        return res.status(403).render("not-found", {
+            message: `Access Denied: Transaction status is ${transaction.status}. Dashboard access only allowed for SUCCESS status.`
+        });
+
+    } catch (err) {
+        console.error("Error loading dashboard:", {
+            message: "Database error or unexpected issue during dashboard access"
+        });
+        res.status(500).send("Internal server error");
+    } finally {
+        if (client) client.release();
+    }
 }
