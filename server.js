@@ -28,5 +28,5 @@ process.on('SIGINT', () => {
 });
 
 app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
+    console.log(`Server is currently Running on http://localhost:${port} ................`);
 });
